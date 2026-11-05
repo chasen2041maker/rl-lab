@@ -1,0 +1,4 @@
+gymnasium[classic-control]>=1.0
+numpy
+matplotlib
+pytest
