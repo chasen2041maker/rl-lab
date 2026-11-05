@@ -8,18 +8,25 @@ How I work here: in every lesson I run something and look at the result first, t
 
 ## Lessons
 
+13 lessons, one or two sittings each, at most two a week: about 3-4 months. Each lesson covers two kinds of "why": the intuition (what problem a design choice fixes; remove it and watch what breaks) and the derivation (the core formula in a few lines, every step checked against numbers from a real run). Convergence proofs are stated with their conditions, not proved.
+
 | # | Environment | Topic | Status |
 | --- | --- | --- | --- |
 | 1 | CartPole | environment, state, action, reward, policy, return; a hand-written rule as the policy | in progress |
 | 2 | 10-armed bandit | exploration vs exploitation (epsilon-greedy) | |
-| 3 | FrozenLake / CliffWalking | tabular Q-learning, discounting, the Bellman update | |
-| 4 | CliffWalking | SARSA vs Q-learning | |
-| 5 | CartPole | DQN: a network instead of a table, replay buffer, target network | |
-| 6 | CartPole | policy gradient (REINFORCE) | |
-| 7 | LunarLander | actor-critic, then PPO | |
-| 8 | my own reward | how a model exploits a badly written reward | |
-| 9 | mine vs stable-baselines3 | multi-seed comparison | |
-| 10 | RL for language models | what RLHF and GRPO do (tentative) | |
+| 3 | FrozenLake with a known model | value iteration: the Bellman equation at its plainest | |
+| 4 | FrozenLake / CliffWalking | tabular Q-learning, discounting, learning rate | |
+| 5 | CliffWalking | SARSA vs Q-learning: hug the cliff or take the long way | |
+| 6 | grid world | Dyna: learn a small world model and rehearse in it | |
+| 7 | CartPole | DQN: a network instead of a table, replay buffer, target network | |
+| 8 | CartPole | policy gradient (REINFORCE) | |
+| 9 | LunarLander | actor-critic, then PPO | |
+| 10 | Pendulum | continuous actions: SAC | |
+| 11 | my own reward | how a model exploits a badly written reward | |
+| 12 | mine vs stable-baselines3 | multi-seed comparison: telling a real improvement from noise | |
+| 13 | RL for language models | what RLHF and GRPO do, on a small example | |
+
+**After lesson 13: a project phase (about six months).** Reproduce the key results of five foundational papers (DQN, PPO, SAC, InstructGPT, DeepSeek-R1) and build one real project, for example training a driver from scratch with RL in MetaDrive and racing it against one trained by imitation.
 
 Lesson notes are in `docs/` (Chinese); progress and the numbers from each lesson are in [PROGRESS.md](PROGRESS.md).
 
