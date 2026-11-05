@@ -20,4 +20,5 @@
 
 - 仓库搭好：`rl/policies.py`（`random_policy`；`rule_policy` 留给我写）、`rl/runner.py`（`run_episode`、`evaluate`）、`labs/l01_cartpole.py`、`tests/test_l01_cartpole.py`、`docs/L01_cartpole.md`
 - 随机乱推（种子 0–19）：平均 22.15 步（0.44 秒），20 回合全是杆倒了
-- 下次从这开始：装环境 → 先猜随机能撑多久 → 跑 → 写第一版规则
+- 11-05：装好 conda `rl`，VS Code 打开仓库。先猜随机乱推能撑多久：A 不到 1 秒 ✓。笔记本跑出来和云端一模一样（平均 22.15 步，每回合步数也一样：种子定了就能复现）；`--show` 看了 3 回合
+- 下次从这开始：写第一版规则 `rule_policy`（杆往哪边歪就往哪边推：`obs[2] > 0` 返回 1，否则 0，替换掉那行 raise）→ 先猜比随机好多少（A 满 500 步 / B 好一两倍 / C 更差）→ 跑 → `--show` 看它怎么失败 → 换角速度、再两个一起
