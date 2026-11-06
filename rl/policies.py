@@ -23,4 +23,6 @@ def rule_policy(obs, rng=None) -> int:
 
     见 docs/L01_cartpole.md 第 3 步。
     """
-    raise NotImplementedError("第 1 课：你来写，见 docs/L01_cartpole.md 第 3 步")
+    if obs[2] + 0.5 * obs[3] > 0:   # 杆在哪边 + 正往哪边转，合起来看
+        return 1
+    return 0

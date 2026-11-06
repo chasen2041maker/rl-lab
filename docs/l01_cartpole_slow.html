@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>倒立摆慢放</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 布局：单列。上：小车 + 杆 + 角度表盘；中：读数；下：角度随时间的曲线 */
+:root {
+  --bg: #f3f5f4; --panel: #ffffff; --fg: #1b2420; --muted: #5f6d67; --line: #d3dbd7;
+  --accent: #127a6c; --accent-soft: #d5ece8; --push: #2b63c6; --over: #d9822b; --over-soft: #fbead6;
+  --danger: #c8443b; --danger-soft: #f7dcd9; --track: #c9d2ce; --cart: #34433d; --pole: #8a5a2b;
+  --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --panel: #19221f; --fg: #e2eae6; --muted: #92a39c; --line: #2b3833;
+  --accent: #4cc2b0; --accent-soft: #1b3a35; --push: #78a6f5; --over: #f0a457; --over-soft: #3d2a17;
+  --danger: #ef7268; --danger-soft: #3d1f1d; --track: #3a4842; --cart: #b8c7c0; --pole: #d4a06a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --panel: #19221f; --fg: #e2eae6; --muted: #92a39c; --line: #2b3833;
+  --accent: #4cc2b0; --accent-soft: #1b3a35; --push: #78a6f5; --over: #f0a457; --over-soft: #3d2a17;
+  --danger: #ef7268; --danger-soft: #3d1f1d; --track: #3a4842; --cart: #b8c7c0; --pole: #d4a06a; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px }
+h1 { font-size: 22px; margin: 0; text-wrap: balance }
+.sub { color: var(--muted); margin: 0 }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.row .lab { font-size: 13px; color: var(--muted); margin-right: 2px }
+button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer }
+button.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 500 }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent) }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+canvas { width: 100%; display: block; border-radius: 8px; background: var(--bg) }
+#scene { height: 300px }
+#chart { height: 200px }
+.read { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px }
+.cell { background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0 }
+.cell .k { font-size: 12px; color: var(--muted) }
+.cell .v { font-family: var(--mono); font-size: 15px; font-weight: 600 }
+.say { border-radius: 8px; padding: 10px 12px; background: var(--accent-soft); min-height: 3.2em }
+.say.over { background: var(--over-soft) }
+.say.end { background: var(--danger-soft) }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted) }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px }
+.take { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 0 }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>倒立摆慢放</h1>
+  <p class="sub">第 1 课 · 种子 0–2 的前 3 回合，和 <span class="mono">--show</span> 窗口里是同样的 3 回合。真实每一步只有 0.02 秒，这里放慢了看。</p>
+
+  <section class="panel">
+    <div class="row"><span class="lab">谁在推</span>
+      <button id="p-angle" class="on">你的规则：往歪的方向推</button>
+      <button id="p-random">随机乱推</button>
+    </div>
+    <div class="row"><span class="lab">第几回合</span>
+      <button class="ep on" data-ep="0">1</button><button class="ep" data-ep="1">2</button><button class="ep" data-ep="2">3</button>
+      <span class="lab" style="margin-left:8px">速度</span>
+      <button class="sp" data-sp="0.05">0.05×</button><button class="sp on" data-sp="0.1">0.1×</button><button class="sp" data-sp="0.25">0.25×</button><button class="sp" data-sp="1">1×（真实）</button>
+    </div>
+    <canvas id="scene"></canvas>
+    <div class="row">
+      <button id="play">播放</button>
+      <button id="prev">◀ 上一步</button>
+      <button id="next">下一步 ▶</button>
+      <input type="range" id="slider" min="0" max="10" value="0" aria-label="第几步">
+    </div>
+    <div class="read">
+      <div class="cell"><div class="k">第几步</div><div class="v" id="r-step"></div></div>
+      <div class="cell"><div class="k">杆往哪边歪（角度）</div><div class="v" id="r-ang"></div></div>
+      <div class="cell"><div class="k">杆正往哪边转（角速度）</div><div class="v" id="r-vel"></div></div>
+      <div class="cell"><div class="k">这一步推哪边</div><div class="v" id="r-push"></div></div>
+    </div>
+    <div class="say" id="say"></div>
+    <div class="legend">
+      <span><i style="background:var(--push)"></i>往杆正在转的方向推：接住它，让它慢下来</span>
+      <span><i style="background:var(--over)"></i>反着推：帮它转得更快（你的规则里就是“推过头”）</span>
+      <span><i style="background:var(--danger)"></i>超过 12° = 倒了</span>
+    </div>
+    <canvas id="chart"></canvas>
+    <p class="take" id="take"></p>
+  </section>
+</div>
+
+<script>
+const D = {"random": [[[0.0137, -0.023, -0.0459, -0.0483, 1], [0.0132, 0.1727, -0.0469, -0.3552, 1], [0.0167, 0.3685, -0.054, -0.6622, 1], [0.0241, 0.5643, -0.0672, -0.9714, 0], [0.0353, 0.3702, -0.0866, -0.7006, 0], [0.0427, 0.1763, -0.1007, -0.4364, 0], [0.0463, -0.0172, -0.1094, -0.1771, 0], [0.0459, -0.2106, -0.1129, 0.0792, 0], [0.0417, -0.404, -0.1113, 0.3342, 0], [0.0336, -0.5973, -0.1047, 0.5899, 1], [0.0217, -0.4009, -0.0929, 0.2661, 1], [0.0137, -0.2046, -0.0875, -0.0543, 1], [0.0096, -0.0083, -0.0886, -0.3733, 1], [0.0094, 0.1879, -0.0961, -0.6926, 1], [0.0132, 0.3842, -0.1099, -1.0139, 1], [0.0209, 0.5806, -0.1302, -1.339, 1], [0.0325, 0.7771, -0.157, -1.6694, 1], [0.048, 0.9737, -0.1904, -2.0066, 1], [0.0675, 1.1702, -0.2305, -2.3517, -1]], [[0.0012, 0.045, -0.0356, 0.0449, 0], [0.0021, -0.1495, -0.0347, 0.3261, 1], [-0.0009, 0.0461, -0.0282, 0.0227, 1], [0.0, 0.2416, -0.0277, -0.2787, 1], [0.0048, 0.4371, -0.0333, -0.58, 0], [0.0136, 0.2424, -0.0449, -0.298, 0], [0.0184, 0.048, -0.0508, -0.0198, 1], [0.0194, 0.2438, -0.0512, -0.3281, 1], [0.0243, 0.4396, -0.0578, -0.6365, 0], [0.0331, 0.2453, -0.0705, -0.3626, 0], [0.038, 0.0513, -0.0778, -0.0929, 1], [0.039, 0.2474, -0.0796, -0.4091, 0], [0.0439, 0.0535, -0.0878, -0.1426, 0], [0.045, -0.1402, -0.0907, 0.1212, 1], [0.0422, 0.0561, -0.0883, -0.1987, 0], [0.0433, -0.1377, -0.0922, 0.0649, 0], [0.0406, -0.3314, -0.0909, 0.3271, 1], [0.0339, -0.1351, -0.0844, 0.0072, 1], [0.0312, 0.0611, -0.0842, -0.3109, 0], [0.0325, -0.1327, -0.0905, -0.0459, 0], [0.0298, -0.3264, -0.0914, 0.2169, 1], [0.0233, -0.1301, -0.087, -0.1031, 1], [0.0207, 0.0661, -0.0891, -0.4219, 1], [0.022, 0.2624, -0.0975, -0.7413, 1], [0.0273, 0.4587, -0.1124, -1.063, 1], [0.0364, 0.6551, -0.1336, -1.3888, 0], [0.0495, 0.4619, -0.1614, -1.1407, 0], [0.0588, 0.2692, -0.1842, -0.9027, 1], [0.0642, 0.4663, -0.2023, -1.2471, 0], [0.0735, 0.2743, -0.2272, -1.024, -1]], [[-0.0238, -0.0202, 0.0314, -0.0408, 1], [-0.0242, 0.1745, 0.0306, -0.3234, 0], [-0.0208, -0.021, 0.0241, -0.0212, 0], [-0.0212, -0.2165, 0.0237, 0.279, 0], [-0.0255, -0.4119, 0.0293, 0.579, 0], [-0.0337, -0.6075, 0.0409, 0.8808, 1], [-0.0459, -0.4129, 0.0585, 0.6012, 0], [-0.0541, -0.6088, 0.0705, 0.9118, 0], [-0.0663, -0.8048, 0.0887, 1.2257, 0], [-0.0824, -1.001, 0.1133, 1.5449, 1], [-0.1024, -0.8074, 0.1442, 1.2896, 1], [-0.1186, -0.6143, 0.17, 1.0453, 1], [-0.1309, -0.4218, 0.1909, 0.8104, 1], [-0.1393, -0.2298, 0.2071, 0.5833, 0], [-0.1439, -0.4271, 0.2187, 0.9334, -1]]], "angle": [[[0.0137, -0.023, -0.0459, -0.0483, 0], [0.0132, -0.2175, -0.0469, 0.2295, 0], [0.0089, -0.4119, -0.0423, 0.507, 0], [0.0006, -0.6064, -0.0321, 0.7861, 0], [-0.0115, -0.801, -0.0164, 1.0685, 0], [-0.0275, -0.9959, 0.005, 1.356, 1], [-0.0474, -0.8009, 0.0321, 1.0649, 1], [-0.0634, -0.6062, 0.0534, 0.7824, 1], [-0.0756, -0.4119, 0.069, 0.507, 1], [-0.0838, -0.2178, 0.0792, 0.2368, 1], [-0.0882, -0.0239, 0.0839, -0.0299, 1], [-0.0886, 0.17, 0.0833, -0.2949, 1], [-0.0852, 0.3638, 0.0774, -0.5602, 1], [-0.078, 0.5578, 0.0662, -0.8276, 1], [-0.0668, 0.7519, 0.0496, -1.0987, 1], [-0.0518, 0.9464, 0.0277, -1.3754, 1], [-0.0328, 1.1411, 0.0002, -1.6593, 1], [-0.01, 1.3362, -0.033, -1.952, 0], [0.0167, 1.1415, -0.0721, -1.6697, 0], [0.0395, 0.9473, -0.1055, -1.4003, 0], [0.0585, 0.7536, -0.1335, -1.1424, 0], [0.0736, 0.5605, -0.1563, -0.8943, 0], [0.0848, 0.3678, -0.1742, -0.6546, 0], [0.0921, 0.1754, -0.1873, -0.4214, 0], [0.0956, -0.0166, -0.1957, -0.1931, 0], [0.0953, -0.2085, -0.1996, 0.032, 0], [0.0911, -0.4003, -0.1989, 0.2557, 0], [0.0831, -0.5921, -0.1938, 0.4796, 0], [0.0713, -0.784, -0.1842, 0.7055, 0], [0.0556, -0.9762, -0.1701, 0.935, 0], [0.0361, -1.1686, -0.1514, 1.1698, 0], [0.0127, -1.3615, -0.128, 1.4114, 0], [-0.0145, -1.5548, -0.0998, 1.6615, 0], [-0.0456, -1.7486, -0.0666, 1.9215, 0], [-0.0806, -1.943, -0.0281, 2.1928, 0], [-0.1194, -2.1378, 0.0157, 2.4767, 1], [-0.1622, -1.9428, 0.0652, 2.1888, 1], [-0.2011, -1.7484, 0.109, 1.917, 1], [-0.236, -1.5546, 0.1474, 1.66, 1], [-0.2671, -1.3615, 0.1806, 1.4166, 1], [-0.2944, -1.169, 0.2089, 1.1854, 1], [-0.3177, -0.9771, 0.2326, 0.9648, -1]], [[0.0012, 0.045, -0.0356, 0.0449, 0], [0.0021, -0.1495, -0.0347, 0.3261, 0], [-0.0009, -0.3442, -0.0282, 0.6077, 0], [-0.0078, -0.5389, -0.016, 0.8913, 0], [-0.0186, -0.7338, 0.0018, 1.1789, 1], [-0.0332, -0.5387, 0.0254, 0.8868, 1], [-0.044, -0.3439, 0.0431, 0.6022, 1], [-0.0509, -0.1494, 0.0552, 0.3234, 1], [-0.0539, 0.0449, 0.0616, 0.0487, 1], [-0.053, 0.2391, 0.0626, -0.224, 1], [-0.0482, 0.4332, 0.0581, -0.4962, 1], [-0.0395, 0.6275, 0.0482, -0.7701, 1], [-0.027, 0.8219, 0.0328, -1.0472, 1], [-0.0106, 1.0166, 0.0119, -1.3294, 1], [0.0098, 1.2116, -0.0147, -1.6183, 0], [0.034, 1.0166, -0.0471, -1.3303, 0], [0.0543, 0.8221, -0.0737, -1.0527, 0], [0.0708, 0.628, -0.0947, -0.784, 0], [0.0833, 0.4343, -0.1104, -0.5226, 0], [0.092, 0.2409, -0.1209, -0.2666, 0], [0.0969, 0.0477, -0.1262, -0.0144, 0], [0.0978, -0.1454, -0.1265, 0.236, 0], [0.0949, -0.3385, -0.1218, 0.4862, 0], [0.0881, -0.5317, -0.1121, 0.7382, 0], [0.0775, -0.7251, -0.0973, 0.9936, 0], [0.063, -0.9188, -0.0774, 1.2542, 0], [0.0446, -1.1129, -0.0523, 1.5217, 0], [0.0224, -1.3073, -0.0219, 1.7976, 0], [-0.0038, -1.5022, 0.0141, 2.0834, 1], [-0.0338, -1.3072, 0.0557, 1.7951, 1], [-0.06, -1.1127, 0.0916, 1.5202, 1], [-0.0822, -0.9188, 0.122, 1.2575, 1], [-0.1006, -0.7255, 0.1472, 1.0054, 1], [-0.1151, -0.5326, 0.1673, 0.7623, 1], [-0.1258, -0.3401, 0.1825, 0.5266, 1], [-0.1326, -0.148, 0.1931, 0.2965, 1], [-0.1355, 0.0439, 0.199, 0.0704, 1], [-0.1347, 0.2357, 0.2004, -0.1535, 1], [-0.1299, 0.4275, 0.1973, -0.3769, 1], [-0.1214, 0.6194, 0.1898, -0.6015, 1], [-0.109, 0.8114, 0.1778, -0.8289, 1], [-0.0928, 1.0037, 0.1612, -1.0608, 1], [-0.0727, 1.1964, 0.14, -1.2989, 1], [-0.0488, 1.3895, 0.114, -1.5447, 1], [-0.021, 1.583, 0.0831, -1.7997, 1], [0.0107, 1.7771, 0.0471, -2.0655, 1], [0.0462, 1.9718, 0.0058, -2.3432, 1], [0.0857, 2.1668, -0.0411, -2.6341, 0], [0.129, 1.972, -0.0938, -2.3543, 0], [0.1684, 1.7779, -0.1408, -2.0918, 0], [0.204, 1.5844, -0.1827, -1.8458, 0], [0.2357, 1.3917, -0.2196, -1.615, -1]], [[-0.0238, -0.0202, 0.0314, -0.0408, 1], [-0.0242, 0.1745, 0.0306, -0.3234, 1], [-0.0208, 0.3692, 0.0241, -0.6063, 1], [-0.0134, 0.564, 0.012, -0.8913, 1], [-0.0021, 0.7589, -0.0058, -1.1802, 0], [0.0131, 0.5639, -0.0294, -0.8893, 0], [0.0244, 0.3692, -0.0472, -0.606, 0], [0.0317, 0.1747, -0.0593, -0.3286, 0], [0.0352, -0.0195, -0.0659, -0.0552, 0], [0.0349, -0.2136, -0.067, 0.216, 0], [0.0306, -0.4077, -0.0627, 0.4868, 0], [0.0224, -0.6019, -0.0529, 0.7591, 0], [0.0104, -0.7963, -0.0378, 1.0347, 0], [-0.0055, -0.9909, -0.0171, 1.3153, 0], [-0.0254, -1.1858, 0.0092, 1.6026, 1], [-0.0491, -0.9908, 0.0413, 1.3128, 1], [-0.0689, -0.7962, 0.0676, 1.0333, 1], [-0.0848, -0.602, 0.0882, 0.7626, 1], [-0.0968, -0.4082, 0.1035, 0.4989, 1], [-0.105, -0.2147, 0.1134, 0.2406, 1], [-0.1093, -0.0214, 0.1183, -0.0143, 1], [-0.1097, 0.1719, 0.118, -0.2675, 1], [-0.1063, 0.3651, 0.1126, -0.5207, 1], [-0.099, 0.5585, 0.1022, -0.7759, 1], [-0.0878, 0.7521, 0.0867, -1.0348, 1], [-0.0728, 0.946, 0.066, -1.299, 1], [-0.0539, 1.1402, 0.04, -1.5703, 1], [-0.0311, 1.3348, 0.0086, -1.8503, 1], [-0.0044, 1.5298, -0.0284, -2.1403, 0], [0.0262, 1.335, -0.0712, -1.8565, 0], [0.0529, 1.1407, -0.1083, -1.5867, 0], [0.0758, 0.9471, -0.1401, -1.3297, 0], [0.0947, 0.754, -0.1667, -1.0839, 0], [0.1098, 0.5614, -0.1883, -0.8478, 0], [0.121, 0.3692, -0.2053, -0.6198, 0], [0.1284, 0.1775, -0.2177, -0.3981, -1]]]};
+const DT = 0.02, LIMIT = 12;
+let pol = "angle", ep = 0, k = 0, speed = 0.1, timer = null, last = 0;
+
+const deg = r => r * 180 / Math.PI;
+function frames() { return D[pol][ep]; }
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+// 这一步是什么情况：-1 = 结束；0 = 往杆正在转的方向推（把杆底下接过去，让它慢下来）；1 = 反着推（帮它转得更快）
+function kind(f) {
+  if (f[4] < 0) return -1;
+  const pushRight = f[4] === 1;
+  return ((f[3] > 0) === pushRight) ? 0 : 1;
+}
+function sizeCanvas(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [g, r.width, r.height];
+}
+function arrow(g, x1, y1, x2, y2, col, w) {
+  g.strokeStyle = col; g.fillStyle = col; g.lineWidth = w;
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+  const a = Math.atan2(y2 - y1, x2 - x1), h = 10 + w;
+  g.beginPath(); g.moveTo(x2, y2);
+  g.lineTo(x2 - h * Math.cos(a - 0.45), y2 - h * Math.sin(a - 0.45));
+  g.lineTo(x2 - h * Math.cos(a + 0.45), y2 - h * Math.sin(a + 0.45)); g.closePath(); g.fill();
+}
+function drawScene() {
+  const [g, w, h] = sizeCanvas(document.getElementById("scene"));
+  g.clearRect(0, 0, w, h);
+  const f = frames()[k], th = f[2], om = f[3], x = f[0];
+  const dialW = Math.min(170, w * 0.36);
+  const sceneW = w - dialW - 10;
+  // 轨道：-2.6 .. 2.6 米
+  const sx = m => 26 + (m + 2.6) / 5.2 * (sceneW - 52);
+  const mpx = (sceneW - 52) / 5.2;
+  const groundY = h - 46;
+  g.strokeStyle = css("--track"); g.lineWidth = 4;
+  g.beginPath(); g.moveTo(sx(-2.6), groundY); g.lineTo(sx(2.6), groundY); g.stroke();
+  g.fillStyle = css("--danger"); g.globalAlpha = 0.25;
+  g.fillRect(sx(-2.6), groundY - 2, sx(-2.4) - sx(-2.6), 6); g.fillRect(sx(2.4), groundY - 2, sx(2.6) - sx(2.4), 6);
+  g.globalAlpha = 1;
+  g.font = "11px " + css("--mono"); g.fillStyle = css("--muted"); g.textAlign = "center";
+  for (const m of [-2.4, 0, 2.4]) g.fillText((m > 0 ? "+" : "") + m + " m", sx(m), groundY + 18);
+  // 小车
+  const cw = 0.5 * mpx * 1.6, ch = 22, cx = sx(x), cy = groundY - 8 - ch;
+  g.fillStyle = css("--cart"); g.beginPath(); g.roundRect(cx - cw / 2, cy, cw, ch, 5); g.fill();
+  g.fillStyle = css("--muted"); g.beginPath(); g.arc(cx - cw / 3, groundY - 5, 5, 0, 7); g.arc(cx + cw / 3, groundY - 5, 5, 0, 7); g.fill();
+  // 杆：长 1 米，画长一点方便看
+  const L = Math.min(h - 130, 1.0 * mpx * 2.2);
+  const px = cx + L * Math.sin(th), py = cy - L * Math.cos(th);
+  g.strokeStyle = css("--line"); g.setLineDash([4, 4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - L - 6); g.stroke(); g.setLineDash([]);
+  const dead = Math.abs(deg(th)) > LIMIT;
+  g.strokeStyle = dead ? css("--danger") : css("--pole"); g.lineWidth = 7; g.lineCap = "round";
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(px, py); g.stroke(); g.lineCap = "butt";
+  g.fillStyle = css("--fg"); g.beginPath(); g.arc(cx, cy, 4, 0, 7); g.fill();
+  // 杆正往哪边转：杆顶上的弧形箭头
+  if (Math.abs(om) > 0.05) {
+    const r = 26, dir = om > 0 ? 1 : -1, span = Math.min(1.4, Math.abs(om) * 0.6);
+    const base = -Math.PI / 2 + th;
+    g.strokeStyle = css("--accent"); g.lineWidth = 2.5;
+    g.beginPath(); g.arc(px, py, r, base - dir * 0.1, base + dir * span, dir < 0); g.stroke();
+    const ea = base + dir * span, ex = px + r * Math.cos(ea), ey = py + r * Math.sin(ea);
+    const ta = ea + dir * Math.PI / 2;
+    g.fillStyle = css("--accent"); g.beginPath(); g.moveTo(ex + 7 * Math.cos(ta), ey + 7 * Math.sin(ta));
+    g.lineTo(ex + 6 * Math.cos(ta + 2.3), ey + 6 * Math.sin(ta + 2.3)); g.lineTo(ex + 6 * Math.cos(ta - 2.3), ey + 6 * Math.sin(ta - 2.3)); g.closePath(); g.fill();
+  }
+  // 推力箭头
+  const kd = kind(f);
+  if (f[4] >= 0) {
+    const col = kd === 1 ? css("--over") : css("--push");
+    const dir = f[4] === 1 ? 1 : -1;
+    const ay = cy + ch / 2;
+    const start = dir > 0 ? cx - cw / 2 - 44 : cx + cw / 2 + 44;
+    arrow(g, start, ay, dir > 0 ? cx - cw / 2 - 4 : cx + cw / 2 + 4, ay, col, 5);
+    g.fillStyle = col; g.font = "600 13px " + css("--sans"); g.textAlign = "center";
+    g.fillText(dir > 0 ? "往右推" : "往左推", start, ay - 12);
+  }
+  // 右侧角度表盘（放大看）
+  const dx = w - dialW / 2 - 6, dy = h - 40, R = dialW / 2 - 26;
+  const toA = d => -Math.PI / 2 + d / 15 * (Math.PI / 2 * 0.95);
+  g.lineWidth = 10;
+  g.strokeStyle = css("--danger-soft"); g.beginPath(); g.arc(dx, dy, R, toA(-15), toA(-LIMIT)); g.stroke();
+  g.beginPath(); g.arc(dx, dy, R, toA(LIMIT), toA(15)); g.stroke();
+  g.strokeStyle = css("--accent-soft"); g.beginPath(); g.arc(dx, dy, R, toA(-LIMIT), toA(LIMIT)); g.stroke();
+  g.fillStyle = css("--muted"); g.font = "11px " + css("--mono"); g.textAlign = "center";
+  for (const d of [-12, 0, 12]) {
+    const a = toA(d); g.fillText((d > 0 ? "+" : "") + d + "°", dx + (R + 16) * Math.cos(a), dy + (R + 16) * Math.sin(a) + 4);
+  }
+  const dd = Math.max(-15, Math.min(15, deg(th))), na = toA(dd);
+  g.strokeStyle = dead ? css("--danger") : css("--fg"); g.lineWidth = 3;
+  g.beginPath(); g.moveTo(dx, dy); g.lineTo(dx + (R - 4) * Math.cos(na), dy + (R - 4) * Math.sin(na)); g.stroke();
+  g.fillStyle = css("--fg"); g.beginPath(); g.arc(dx, dy, 4, 0, 7); g.fill();
+  g.fillStyle = css("--muted"); g.font = "12px " + css("--sans");
+  g.fillText("角度表（放大）", dx, dy + 22);
+}
+function peaks(fr) {
+  const out = [];
+  for (let i = 1; i < fr.length - 1; i++) {
+    const a = deg(fr[i - 1][2]), b = deg(fr[i][2]), c = deg(fr[i + 1][2]);
+    if ((b >= a && b > c) || (b <= a && b < c)) out.push(i);
+  }
+  return out;
+}
+function drawChart() {
+  const [g, w, h] = sizeCanvas(document.getElementById("chart"));
+  g.clearRect(0, 0, w, h);
+  const fr = frames(), N = Math.max(fr.length - 1, 1);
+  const L = 42, R = 12, T = 12, B = 26, YM = 16;
+  const X = i => L + (w - L - R) * i / N;
+  const Y = d => T + (h - T - B) * (YM - d) / (2 * YM);
+  g.font = "11px " + css("--mono"); g.lineWidth = 1;
+  for (const d of [-12, 0, 12]) {
+    g.strokeStyle = d === 0 ? css("--line") : css("--danger"); g.setLineDash(d === 0 ? [] : [5, 4]);
+    g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(w - R, Y(d)); g.stroke(); g.setLineDash([]);
+    g.fillStyle = css("--muted"); g.textAlign = "right"; g.fillText((d > 0 ? "+" : "") + d + "°", L - 6, Y(d) + 4);
+  }
+  g.textAlign = "center";
+  const stepTick = N > 40 ? 10 : 5;
+  for (let i = 0; i <= N; i += stepTick) g.fillText(i + " 步", X(i), h - 8);
+  g.strokeStyle = css("--muted"); g.lineWidth = 1.5; g.beginPath();
+  fr.forEach((f, i) => { const y = Y(Math.max(-YM, Math.min(YM, deg(f[2])))); if (i === 0) g.moveTo(X(i), y); else g.lineTo(X(i), y); });
+  g.stroke();
+  fr.forEach((f, i) => {
+    const kd = kind(f);
+    g.fillStyle = kd === -1 ? css("--danger") : kd === 1 ? css("--over") : css("--push");
+    g.globalAlpha = i <= k ? 1 : 0.25;
+    g.beginPath(); g.arc(X(i), Y(Math.max(-YM, Math.min(YM, deg(f[2])))), i === k ? 6 : 3.2, 0, 7); g.fill();
+  });
+  g.globalAlpha = 1;
+  if (pol === "angle") {
+    g.fillStyle = css("--fg"); g.font = "600 11px " + css("--mono");
+    for (const i of peaks(fr)) {
+      if (i > k) continue;
+      const d = deg(fr[i][2]);
+      g.fillText((d > 0 ? "+" : "") + d.toFixed(1) + "°", X(i), Y(d) + (d > 0 ? -10 : 18));
+    }
+  }
+  g.strokeStyle = css("--fg"); g.globalAlpha = 0.3;
+  g.beginPath(); g.moveTo(X(k), T); g.lineTo(X(k), h - B); g.stroke(); g.globalAlpha = 1;
+}
+function side(v) { return v > 0 ? "右" : "左"; }
+function show() {
+  const fr = frames(), f = fr[k], N = fr.length - 1;
+  document.getElementById("slider").max = N;
+  document.getElementById("slider").value = k;
+  const d = deg(f[2]);
+  document.getElementById("r-step").textContent = `${k} / ${N}（${(k * DT).toFixed(2)} 秒）`;
+  document.getElementById("r-ang").textContent = `${d > 0 ? "+" : ""}${d.toFixed(1)}°（往${side(f[2])}歪）`;
+  document.getElementById("r-vel").textContent = `${f[3] > 0 ? "+" : ""}${f[3].toFixed(2)}（往${side(f[3])}转）`;
+  document.getElementById("r-push").textContent = f[4] < 0 ? "—（结束）" : (f[4] === 1 ? "往右 →" : "← 往左");
+  const say = document.getElementById("say"), kd = kind(f);
+  say.className = "say" + (kd === 1 ? " over" : kd === -1 ? " end" : "");
+  if (kd === -1) say.textContent = `杆歪到 ${Math.abs(d).toFixed(1)}°，超过 12°，倒了。一共撑了 ${N} 步（${(N * DT).toFixed(2)} 秒）。`;
+  else if (kd === 1 && f[2] * f[3] < 0 && (f[2] > 0) === (f[4] === 1)) say.textContent = `杆还往${side(f[2])}歪着，但已经在往${side(f[3])}摆回来了。你还往${side(f[2])}推，等于帮它往回甩，它会甩过中间、甩到另一边去。`;
+  else if (kd === 1) say.textContent = `杆正往${side(f[3])}转，这一步却往${f[4] === 1 ? "右" : "左"}推，帮它转得更快。`;
+  else say.textContent = `杆正往${side(f[3])}转，这一步往${side(f[3])}推，把杆底下往它转的方向接过去，让它慢下来。`;
+  const take = document.getElementById("take");
+  if (pol === "angle") {
+    const ps = peaks(fr).map(i => Math.abs(deg(fr[i][2])).toFixed(1) + "°");
+    take.innerHTML = `你的规则只看杆<b>在哪边</b>，不看它<b>正往哪边走</b>。橙色那几步：杆已经在往回摆了，你还往原来那边推，就把它甩过了头。所以每摆一次比上一次大（${ps.join(" → ")} → 倒），${(N * DT).toFixed(2)} 秒倒了。`;
+  } else {
+    take.innerHTML = `随机乱推不看杆，推对推错全凭运气，蓝橙两色混在一起，几步就倒（这一回合 ${N} 步，${(N * DT).toFixed(2)} 秒）。`;
+  }
+  drawScene(); drawChart();
+}
+function stop() { if (timer) cancelAnimationFrame(timer); timer = null; document.getElementById("play").textContent = "播放"; }
+function tick(ts) {
+  const ms = DT * 1000 / speed;
+  if (ts - last >= ms) { last = ts; if (k < frames().length - 1) { k++; show(); } else { stop(); return; } }
+  timer = requestAnimationFrame(tick);
+}
+document.getElementById("play").addEventListener("click", () => {
+  if (timer) { stop(); return; }
+  if (k >= frames().length - 1) k = 0;
+  document.getElementById("play").textContent = "暂停"; last = 0; timer = requestAnimationFrame(tick);
+});
+document.getElementById("prev").addEventListener("click", () => { stop(); if (k > 0) { k--; show(); } });
+document.getElementById("next").addEventListener("click", () => { stop(); if (k < frames().length - 1) { k++; show(); } });
+document.getElementById("slider").addEventListener("input", e => { stop(); k = +e.target.value; show(); });
+function setPol(p) { pol = p; stop(); k = 0;
+  document.getElementById("p-angle").classList.toggle("on", p === "angle");
+  document.getElementById("p-random").classList.toggle("on", p === "random"); show(); }
+document.getElementById("p-angle").addEventListener("click", () => setPol("angle"));
+document.getElementById("p-random").addEventListener("click", () => setPol("random"));
+document.querySelectorAll(".ep").forEach(b => b.addEventListener("click", () => {
+  stop(); ep = +b.dataset.ep; k = 0;
+  document.querySelectorAll(".ep").forEach(x => x.classList.toggle("on", x === b)); show(); }));
+document.querySelectorAll(".sp").forEach(b => b.addEventListener("click", () => {
+  speed = +b.dataset.sp; document.querySelectorAll(".sp").forEach(x => x.classList.toggle("on", x === b)); }));
+new ResizeObserver(() => show()).observe(document.getElementById("scene"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", show);
+k = 14;
+show();
+</script>
+</body>
+</html>
