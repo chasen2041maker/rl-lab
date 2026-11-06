@@ -13,7 +13,7 @@ How I work here: in every lesson I run something and look at the result first, t
 | # | Environment | Topic | Status |
 | --- | --- | --- | --- |
 | 1 | CartPole | environment, state, action, reward, policy, return; a hand-written rule as the policy | done: 22 → 41 → 199 → 500 steps |
-| 2 | 10-armed bandit | exploration vs exploitation (epsilon-greedy) | |
+| 2 | 10-armed bandit | exploration vs exploitation (epsilon-greedy) | in progress |
 | 3 | FrozenLake with a known model | value iteration: the Bellman equation at its plainest | |
 | 4 | FrozenLake / CliffWalking | tabular Q-learning, discounting, learning rate | |
 | 5 | CliffWalking | SARSA vs Q-learning: hug the cliff or take the long way | |
